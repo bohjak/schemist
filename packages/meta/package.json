@@ -1,0 +1,18 @@
+{
+  "name": "meta",
+  "version": "0.0.0",
+  "description": "Given a schema, show all its non-structured data",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild src/index.tsx --bundle --minify --sourcemap --outdir=dist/js --platform=browser",
+    "dev": "esbuild src/index.tsx --bundle --sourcemap --outdir=dist/js --platform=browser --servedir=dist",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.14.11",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "schemist",
+  "version": "0.0.1",
+  "description": "Transforming dense-as-lead schemas into gold.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@changesets/cli": "^2.19.0"
+  }
+}
