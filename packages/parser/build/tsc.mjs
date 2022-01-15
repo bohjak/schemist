@@ -1,5 +1,6 @@
 // @ts-check
 import tsc from "typescript";
+import {performance} from "perf_hooks";
 
 /**
  * @typedef {tsc.CompilerOptions} TsCompilerOptions
@@ -44,6 +45,8 @@ function compile(fileNames, options) {
   }
 }
 
+const start = performance.now();
+
 // Run the compiler
 compile(["src/index.ts"], {
   declaration: true,
@@ -54,11 +57,12 @@ compile(["src/index.ts"], {
   declarationMap: true,
   strict: true,
   lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
-  // target: tsc.ScriptTarget.ESNext,
 })
-  .then(() =>
-    console.log("=== Type declaration successful".padEnd(39, " ") + "===")
-  )
+  .then(() => {
+    console.log("=== Type declaration successful".padEnd(39, " ") + "===");
+    console.log(`💤 Done in ${Math.round(performance.now() - start)}ms`);
+    console.log();
+  })
   .catch((e) => {
     console.log("TSC found the following type errors:");
     Array.isArray(e) ? e.forEach((m) => console.log(m)) : console.log(e);

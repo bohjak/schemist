@@ -1,5 +1,8 @@
 // @ts-check
 import {Worker} from "worker_threads";
+import {performance} from "perf_hooks";
+
+const start = performance.now();
 
 /**
  * @param {string} path
@@ -19,7 +22,10 @@ const runService = (path) => {
   });
 };
 
-Promise.all([
-  runService("./build/esbuild.mjs"),
-  runService("./build/tsc.mjs"),
-]).then(() => console.log("Build successful"));
+Promise.all([runService("./build/esbuild.mjs"), runService("./build/tsc.mjs")])
+  .then(() => {
+    console.log("Build successful");
+  })
+  .finally(() => {
+    console.log(`Done in ${Math.round(performance.now() - start)}ms`);
+  });

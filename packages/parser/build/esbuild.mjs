@@ -1,5 +1,8 @@
 // @ts-check
 import {build, analyzeMetafile} from "esbuild";
+import {performance} from "perf_hooks";
+
+const start = performance.now();
 
 build({
   entryPoints: ["src/index.ts"],
@@ -13,5 +16,10 @@ build({
   metafile: true,
 })
   .then(({metafile}) => analyzeMetafile(metafile))
-  .then((r) => console.log("=== Typescript transpilation succesful ===", r))
+  .then((r) => {
+    console.log("=== Typescript transpilation succesful ===");
+    console.log(r);
+    console.log(`⚡ Done in ${Math.round(performance.now() - start)}ms`);
+    console.log();
+  })
   .catch(console.log);

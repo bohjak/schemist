@@ -2,20 +2,17 @@
   "name": "@schemist/parser",
   "version": "0.0.0",
   "description": "Parsing library for JSONSchema",
+  "license": "ISC",
+  "author": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "pnpm clean && node ./build/build.mjs",
-    "test": "echo \"Error: no test specified\"",
+    "clean": "rm -rf ./dist",
     "format": "prettier --write 'src/**/*.{ts,tsx,json}'",
-    "clean": "rm -rf ./dist"
+    "test": "echo \"Error: no test specified\""
   },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "@types/json-schema": "^7.0.9",
-    "esbuild": "^0.14.11",
-    "prettier": "^2.5.1",
-    "typescript": "^4.5.4"
+    "@types/json-schema": "^7.0.9"
   }
 }
