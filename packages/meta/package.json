@@ -1,18 +1,25 @@
 {
-  "name": "meta",
+  "name": "@schemist/meta",
   "version": "0.0.0",
   "description": "Given a schema, show all its non-structured data",
+  "license": "ISC",
+  "author": "",
   "main": "index.js",
   "scripts": {
-    "build": "esbuild src/index.tsx --bundle --minify --sourcemap --outdir=dist/js --platform=browser",
-    "dev": "esbuild src/index.tsx --bundle --sourcemap --outdir=dist/js --platform=browser --servedir=dist",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "esbuild src/index.tsx --bundle --minify --sourcemap --outdir=dist --platform=browser",
+    "dev": "esbuild src/index.tsx --bundle --sourcemap --outdir=www/js --platform=browser --servedir=www",
+    "format": "prettier --write 'src/**/*.{ts,tsx,json}'",
+    "test": "echo \"Error: no test specified\""
   },
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "esbuild": "^0.14.11",
+  "dependencies": {
+    "@schemist/parser": "workspace:*",
     "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "react-dom": "^17.0.2",
+    "styled-components": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/json-schema": "^7.0.9",
+    "@types/styled-components": "^5.1.20",
+    "react-is": "^17.0.2"
   }
 }

@@ -1,5 +1,37 @@
-import React from 'react';
+import React from "react";
+import styled from "styled-components";
+import {Info} from "./info";
+import schema from "./schema.json";
+import {deref} from "@schemist/parser";
+
+const Headline = styled.h1`
+  color: blue;
+`;
 
 export const App: React.VFC = () => {
-  return <div><h1>Yay!!!</h1></div>;
-}
+  const [s, setS] = React.useState(schema);
+
+  React.useEffect(() => {
+    deref(
+      {unsafeAllowUriAddressResolution: true},
+      {},
+      schema,
+      schema.$ref
+    ).then(([val, err]) => {
+      if (err || typeof val !== "object") {
+        return console.error(err);
+      }
+
+      console.log("value", val);
+
+      setS({...schema, ...val});
+    });
+  }, []);
+
+  return (
+    <div>
+      <Headline>Yay!!!</Headline>
+      <Info schema={s} />
+    </div>
+  );
+};
