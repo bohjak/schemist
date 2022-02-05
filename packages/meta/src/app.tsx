@@ -9,26 +9,24 @@ const Headline = styled.h1`
 `;
 
 export const App: React.VFC = () => {
+  const [loading, setLoading] = React.useState(true);
   const [s, setS] = React.useState(schema);
 
   React.useEffect(() => {
-    deref(
-      {unsafeAllowUriAddressResolution: true},
-      {},
-      schema,
-      schema.$ref
-    ).then(([val, err]) => {
-      if (err || typeof val !== "object") {
-        return console.error(err);
-      }
+    deref({unsafeAllowUriAddressResolution: true}, {}, schema, schema.$ref)
+      .then(([val, err]) => {
+        if (err || typeof val !== "object") {
+          return console.error(err);
+        }
 
-      console.log("value", val);
-
-      setS({...schema, ...val});
-    });
+        setS({...schema, ...val});
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  return (
+  return loading ? (
+    <Headline>Loading ...</Headline>
+  ) : (
     <div>
       <Headline>Yay!!!</Headline>
       <Info schema={s} />
