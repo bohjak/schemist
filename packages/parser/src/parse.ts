@@ -1,113 +1,43 @@
-import {JSONSchema7} from "json-schema";
-import {derefSchema} from "./deref";
-import {deref} from "./internal";
+import {JSONSchema7, JSONSchema7Definition} from "json-schema";
 
-const keys = <O>(o: O) => Object.keys(o) as (keyof O)[];
+type URI = string;
 
 interface SchemaNode {
-  id?: string;
-  raw?: JSONSchema7;
-  title?: string;
-  description?: string;
-  key?: string;
-  group?: string;
-  path?: string[];
-  idx?: number;
-  isRequired?: boolean;
-  children?: SchemaNode[];
+  uri: URI;
+  raw: unknown;
+  parents: SchemaNode[];
+  children: SchemaNode[];
 }
 
-/*
-TODO
-Global Record<JSONPointer, SchemaNode>
-SchemaNode.children: JSONPointer[]
-*/
-
-async function parseJsonSchema(
-  schema: JSONSchema7
-): Promise<[SchemaNode, Error?]> {
-  const node: SchemaNode = {raw: schema};
-
-  for (const key of keys(schema)) {
-    switch (key) {
-      case "title": {
-        node.title = schema[key];
-        break;
-      }
-      case "description": {
-        node.description = schema[key];
-        break;
-      }
-      case "additionalItems": {
-        let p = schema[key];
-        break;
-      }
-      case "additionalProperties":
-      case "allOf":
-      case "anyOf":
-      case "const":
-      case "contains":
-      case "contentEncoding":
-      case "contentMediaType":
-      case "default":
-      case "definitions":
-      case "dependencies":
-      case "else":
-      case "enum":
-      case "examples":
-      case "exclusiveMaximum":
-      case "exclusiveMinimum":
-      case "format":
-      case "if":
-      case "items":
-      case "maxItems":
-      case "maxLength":
-      case "maxProperties":
-      case "maximum":
-      case "minItems":
-      case "minLength":
-      case "minProperties":
-      case "minimum":
-      case "multipleOf":
-      case "not":
-      case "oneOf":
-      case "pattern":
-      case "patternProperties":
-      case "properties":
-      case "propertyNames":
-      case "readOnly":
-      case "required":
-      case "then":
-      case "type":
-      case "uniqueItems":
-      case "writeOnly": {
-      }
-      case "$comment":
-      case "$id":
-      case "$schema":
-      case "$ref":
-      default: {
-        // noop
-        break;
-      }
-    }
+/**
+ * It should recursively go through the schema and "flatten" its contents into
+ * the nodes map as a doubly-multiply-linked list (see cyclical graph)
+ * @param schema Schema to be processed
+ * @param baseUri Currently set base URI
+ * @param nodes Doubly-multiply-linked list
+ * @returns Since we need to reference the nodes list as it is being created,
+ *          there is no point in returning anything. Might change.
+ */
+function parseJSONSchema7(
+  schema: JSONSchema7Definition,
+  baseUri: URI,
+  nodes: Map<URI, SchemaNode>
+): void {
+  // As per https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-4.3.1
+  if (schema === true) {
+    schema = {};
+  } else if (schema === false) {
+    schema = {not: {}};
   }
 
-  return [node];
+  const {$id, definitions} = schema;
+  if ($id) {
+    parseJSONSchema7(schema, mergeUris($id, baseUri), nodes);
+  }
+
+  for (const key of Object.keys(definitions)) {
+    const value = definitions[key];
+  }
 }
 
-export async function exampleUsage(schema: JSONSchema7) {
-  const [dschema, derErr] = await derefSchema(
-    deref.bind(null, {unsafeAllowRemoteUriResolution: true}, {}, schema),
-    schema
-  );
-  if (derErr !== undefined) {
-    console.error(derErr);
-  }
-
-  const [nodes, parsErr] = await parseJsonSchema(dschema);
-  if (parsErr !== undefined) {
-    return console.error(parsErr);
-  }
-  console.log(nodes);
-}
+declare function mergeUris(ref: string, base: string): string;
