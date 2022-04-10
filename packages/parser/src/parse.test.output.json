@@ -1,0 +1,5 @@
+
+> @schemist/parser@0.0.0 test /home/jbk/code/schemist/packages/parser
+> esbuild src/parse.test.ts --outdir=test --platform=node --bundle && node test/parse.test.js
+
+ ELIFECYCLE  Test failed. See above for more details.

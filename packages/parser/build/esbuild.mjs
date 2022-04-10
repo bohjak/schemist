@@ -11,7 +11,6 @@ build({
   sourcemap: true,
   outdir: "dist",
   platform: "node",
-  target: "node14",
   external: ["react", "react-dom", "styled-components"],
   metafile: true,
 })

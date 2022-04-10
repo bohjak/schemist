@@ -92,7 +92,7 @@ function removeDots(path: string): string {
     else result.push(s);
   }
 
-  // TODO: this is shit and doesn't cover all abnormal test cases
+  // FIXME: this is shit and doesn't cover all abnormal test cases
   // If the path ends with either `.` or `..` we would be missing the closing /
   if (path.endsWith(".")) result.push("");
   if (path.startsWith("/") && result[0]) return "/" + result.join("/");

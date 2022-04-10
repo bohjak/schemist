@@ -10,7 +10,7 @@
     "build": "pnpm clean && node ./build/build.mjs",
     "clean": "rm -rf ./dist",
     "format": "prettier --write 'src/**/*.{ts,tsx,json}'",
-    "test": "echo \"Error: no test specified\""
+    "test": "esbuild src/parse.test.ts --outdir=test --platform=node --bundle && node test/parse.test.js"
   },
   "devDependencies": {
     "@types/json-schema": "^7.0.9"
