@@ -1,180 +1,89 @@
 import {JSONSchema7, JSONSchema7Definition} from "json-schema";
 import {composeUri, getTarget, parseUri} from "./uri";
 
-type SchemaDict = Record<string, JSONSchema7>;
+export type SchemaNodes = Record<string, SchemaNode>;
 
-interface prepareArgs {
-  /** schema Schema to be processed */
-  schema: JSONSchema7Definition;
-  /** baseUri Currently set base URI */
-  baseUri?: string;
-  /** currentPath Current path relative to baseUri */
-  currentPath?: string;
-  /** nodes Doubly-multiply-linked list */
-  dict: SchemaDict;
-  /** allows URI resolution over the network */
-  unsafeAllowRemoteUriResolution?: boolean;
+// This cannot work because a reference could be used for both a keyword and a user schema
+type SchemaType = "root" | "definition" | "keyword" | "user";
+
+export interface SchemaNode {
+  uri: string;
+  title?: string;
+  valueType?: string | string[];
+  parents: SchemaNodes;
+  children: SchemaNodes;
+  ref?: string;
+  type?: SchemaType;
 }
 
-// TODO: could be possibly done in one pass*. In addition to SchemaDict, we'd need nodes and derefQ
-// * One for simple referenceless schemas and a very short second for the rest
+interface ParseArgs {
+  /** Schema to be processed */
+  schema: JSONSchema7Definition;
+  /** Doubly-multiply-linked list */
+  nodes: SchemaNodes;
+  /** Non-fatal errors encountered during parsing */
+  errs: Error[];
+  /** Currently set base URI */
+  baseUri?: string;
+  /** Current fragment path relative to baseUri; must begin with '#' */
+  currentPath?: string;
+  type?: SchemaType;
+  /** Allows remote URI resolution over the network */
+  unsafeAllowRemoteUriResolution?: boolean;
+  /** Parents of the current schema */
+  parents?: SchemaNodes;
+  /** Queue of schemas waiting to be dereferenced; key is the referenced URI, value the parents of the schemas that reference it */
+  derefQ?: Record<string, SchemaNodes>;
+  /** Flag to mark that a schema is a definition and doesn't need to be linked to its parent */
+  isDefinition?: boolean;
+}
 
 /**
  * Traverses the schema and resolves all URIs and remote schemas (if enabled), creating a flat URI/subschema dictionary.
  * @returns Since we need to reference the nodes list as it is being created,
  *          there is no point in returning anything. Might change.
  */
-export function prepareJSONSchema7({
-  schema,
-  baseUri = "",
-  currentPath = "#",
-  dict,
-  unsafeAllowRemoteUriResolution,
-}: prepareArgs): void {
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-4.3.1
-  // We don't want to deal with booleans
-  if (schema === true) {
-    schema = {};
-  } else if (schema === false) {
-    schema = {not: {}};
-  }
-
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.2
-  // $id defines a URI for the schema
-  // A subschema's $id is resolved against the base URI
-  if (schema.$id) {
-    const newBaseUri = mergeUris(baseUri, schema.$id);
-
-    if (newBaseUri !== baseUri) {
-      return prepareJSONSchema7({
-        schema,
-        baseUri: newBaseUri,
-        currentPath,
-        dict,
-      });
-    }
-  }
-
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3
-  if (schema.$ref && unsafeAllowRemoteUriResolution) {
-    // TODO: fetch and process remote schemas
-  }
-
-  /************************************************************
-   * Create the current schema node and link it to its parent *
-   ************************************************************/
-
-  const uri = mergeUris(baseUri, currentPath);
-  dict[uri] = schema;
-
-  /*******************************************************************
-   * Go one by one through the schema fields and create schema nodes *
-   *******************************************************************/
-
-  function parseObj(prop: keyof JSONSchema7) {
-    if (schema[prop] == undefined) {
-      return;
-    }
-
-    for (const key of Object.keys(schema[prop])) {
-      const value = schema[prop][key];
-      prepareJSONSchema7({
-        schema: value,
-        baseUri,
-        currentPath: `${currentPath}/${prop}/${key}`,
-        dict,
-      });
-    }
-  }
-
-  function parseProp(prop: keyof JSONSchema7) {
-    if (schema[prop] == undefined) {
-      return;
-    }
-
-    prepareJSONSchema7({
-      schema: schema[prop],
-      baseUri,
-      currentPath: `${currentPath}/${prop}`,
-      dict,
-    });
-  }
-
-  parseObj("definitions");
-
-  parseObj("properties");
-  parseObj("patternProperties");
-  parseProp("propertyNames");
-  parseProp("additionalProperties");
-
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-validation-01#section-6.5.7
-  for (const key of Object.keys(schema.dependencies ?? {})) {
-    const value = schema.dependencies[key];
-    if (!Array.isArray(value)) {
-      prepareJSONSchema7({
-        schema: value,
-        baseUri,
-        dict,
-        currentPath: `${currentPath}/dependencies/${key}`,
-      });
-    }
-  }
-
-  if (Array.isArray(schema.items)) {
-    parseObj("items");
-  } else {
-    parseProp("items");
-  }
-  parseProp("additionalItems");
-  parseProp("contains");
-
-  parseProp("if");
-  parseProp("then");
-  parseProp("else");
-
-  parseProp("not");
-  parseObj("allOf");
-  parseObj("anyOf");
-  parseObj("oneOf");
-}
-
-export type SchemaNodes = Record<string, SchemaNode>;
-
-export interface SchemaNode {
-  uri: string;
-  title?: string;
-  valueType: string | string[];
-  parents: SchemaNodes;
-  children: SchemaNodes;
-  type?: "keyword" | "custom";
-}
-
-interface ParseArgs {
-  schema: JSONSchema7Definition;
-  nodes: SchemaNodes;
-  baseUri?: string;
-  currentPath?: string;
-  parent?: SchemaNode;
-  dict: SchemaDict;
-  errs: Error[];
-}
-
 export function parseJSONSchema7({
   schema,
   nodes,
   baseUri = "",
   currentPath = "#",
-  parent,
-  dict,
+  parents = {},
   errs,
+  derefQ = {},
+  isDefinition,
+  unsafeAllowRemoteUriResolution,
 }: ParseArgs): void {
-  // COPIED FROM PREPARATION STAGE
   // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-4.3.1
   // We don't want to deal with booleans
   if (schema === true) {
     schema = {};
   } else if (schema === false) {
     schema = {not: {}};
+  }
+
+  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3
+  // If schema is a reference object, it either references an already processed node, in which case we simply link it, otherwise add it to the dereferencing queue.
+  if (schema.$ref) {
+    if (unsafeAllowRemoteUriResolution) {
+      // TODO: fetch and process remote schemas
+    }
+
+    // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3.2
+    const refUri = mergeUris(baseUri, schema.$ref);
+
+    if (refUri in nodes) {
+      const node = nodes[refUri];
+      node.parents = {...node.parents, ...parents};
+      for (const parent of Object.values(parents)) {
+        parent.children[refUri] = node;
+      }
+    } else {
+      derefQ[refUri] = parents;
+    }
+
+    // All other properties in a "$ref" object MUST be ignored.
+    return;
   }
 
   // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.2
@@ -189,75 +98,70 @@ export function parseJSONSchema7({
         baseUri: newBaseUri,
         currentPath,
         nodes,
-        dict,
-        parent,
+        parents,
         errs,
+        derefQ,
       });
     }
   }
 
-  // DEREFERENCING
-
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3
-  if (schema.$ref) {
-    // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3.2
-    currentPath = schema.$ref;
-    const refUri = mergeUris(baseUri, currentPath);
-
-    if (refUri in nodes) {
-      const node = nodes[refUri];
-      node.parents[parent.uri] = parent;
-      parent.children[refUri] = node;
-      return;
-    }
-
-    // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3
-    // All other properties in a "$ref" object MUST be ignored.
-    schema = dict[refUri];
-
-    if (schema.$ref) {
-      errs.push(
-        new Error(
-          `cyclical reference: referenced schema ${refUri} contains a reference to ${mergeUris(
-            baseUri,
-            schema.$ref
-          )}`
-        )
-      );
-    }
-  }
-
-  // NODE CREATION
+  /************************************************************
+   * Create the current schema node and link it to its parent *
+   ************************************************************/
 
   const uri = mergeUris(baseUri, currentPath);
+
+  if (isDefinition) {
+    parents = undefined;
+  }
+
+  if (uri in derefQ) {
+    parents = derefQ[uri];
+
+    // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-8.3
+    // It's never going to happen that the schema is in derefQueue and has reference itself (or rather it may happen but it's not going to get here).
+    // Cyclical references (generally references referencing other references) are never actually get dereferenced, because as soon as we detect $ref, this function returns.
+  }
+
   const node: SchemaNode = {
     uri,
     title: schema.title,
     valueType: schema.type,
-    parents: parent ? {[parent.uri]: parent} : {},
+    ref: schema.$ref && mergeUris(baseUri, schema.$ref),
+    parents,
     children: {},
   };
   nodes[uri] = node;
-  parent && (parent.children[uri] = node);
+  for (const parent of Object.values(parents)) {
+    parent.children[uri] = node;
+  }
 
-  // TREE TRAVERSAL
+  /*******************************************************************
+   * Go one by one through the schema fields and create schema nodes *
+   *******************************************************************/
 
-  function parseObj(prop: keyof JSONSchema7) {
+  function parseObj(prop: keyof JSONSchema7, isDefinition?: boolean) {
     if (schema[prop] == undefined) {
       return;
     }
 
     for (const key of Object.keys(schema[prop])) {
       const value = schema[prop][key];
+
+      // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-validation-01#section-6.5.7
+      // .dependencies can have a value of `string[]`
+      if (Array.isArray(value)) return;
+
       const newPath = `${currentPath}/${prop}/${key}`;
       parseJSONSchema7({
         schema: value,
         baseUri,
         currentPath: newPath,
-        dict,
         nodes,
-        parent: node,
+        parents: {[uri]: node},
         errs,
+        derefQ,
+        isDefinition,
       });
     }
   }
@@ -272,10 +176,10 @@ export function parseJSONSchema7({
       schema: schema[prop],
       baseUri,
       currentPath: newPath,
-      dict,
       nodes,
-      parent: node,
+      parents: {[uri]: node},
       errs,
+      derefQ,
     });
   }
 
@@ -284,22 +188,7 @@ export function parseJSONSchema7({
   parseProp("propertyNames");
   parseProp("additionalProperties");
 
-  // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-validation-01#section-6.5.7
-  for (const key of Object.keys(schema.dependencies ?? {})) {
-    const value = schema.dependencies[key];
-    if (!Array.isArray(value)) {
-      const newPath = `${currentPath}/dependencies/${key}`;
-      parseJSONSchema7({
-        schema: value,
-        baseUri,
-        dict,
-        currentPath: newPath,
-        nodes,
-        parent: node,
-        errs,
-      });
-    }
-  }
+  parseObj("dependencies");
 
   if (Array.isArray(schema.items)) {
     parseObj("items");
@@ -317,6 +206,8 @@ export function parseJSONSchema7({
   parseObj("allOf");
   parseObj("anyOf");
   parseObj("oneOf");
+
+  parseObj("definitions", true);
 }
 
 function mergeUris(base: string, ref: string): string {
