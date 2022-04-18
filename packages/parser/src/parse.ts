@@ -3,17 +3,18 @@ import {composeUri, getTarget, parseUri} from "./uri";
 
 export type SchemaNodes = Record<string, SchemaNode>;
 
-// This cannot work because a reference could be used for both a keyword and a user schema
-type SchemaType = "root" | "definition" | "keyword" | "user";
-
 export interface SchemaNode {
+  /** Reference identifier */
   uri: string;
-  title?: string;
-  valueType?: string | string[];
+  /** References to parent nodes */
   parents: SchemaNodes;
+  /** References to child nodes */
   children: SchemaNodes;
-  ref?: string;
-  type?: SchemaType;
+
+  /** #Meta */
+  title?: string;
+  description?: string;
+  valueType?: string | string[];
 }
 
 interface ParseArgs {
@@ -27,7 +28,6 @@ interface ParseArgs {
   baseUri?: string;
   /** Current fragment path relative to baseUri; must begin with '#' */
   currentPath?: string;
-  type?: SchemaType;
   /** Allows remote URI resolution over the network */
   unsafeAllowRemoteUriResolution?: boolean;
   /** Parents of the current schema */
@@ -40,8 +40,7 @@ interface ParseArgs {
 
 /**
  * Traverses the schema and resolves all URIs and remote schemas (if enabled), creating a flat URI/subschema dictionary.
- * @returns Since we need to reference the nodes list as it is being created,
- *          there is no point in returning anything. Might change.
+ * @returns Parent / root node
  */
 export function parseJSONSchema7({
   schema,
@@ -53,7 +52,7 @@ export function parseJSONSchema7({
   derefQ = {},
   isDefinition,
   unsafeAllowRemoteUriResolution,
-}: ParseArgs): void {
+}: ParseArgs): SchemaNode | undefined {
   // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-01#section-4.3.1
   // We don't want to deal with booleans
   if (schema === true) {
@@ -112,7 +111,7 @@ export function parseJSONSchema7({
   const uri = mergeUris(baseUri, currentPath);
 
   if (isDefinition) {
-    parents = undefined;
+    parents = {};
   }
 
   if (uri in derefQ) {
@@ -127,7 +126,6 @@ export function parseJSONSchema7({
     uri,
     title: schema.title,
     valueType: schema.type,
-    ref: schema.$ref && mergeUris(baseUri, schema.$ref),
     parents,
     children: {},
   };
@@ -140,74 +138,86 @@ export function parseJSONSchema7({
    * Go one by one through the schema fields and create schema nodes *
    *******************************************************************/
 
-  function parseObj(prop: keyof JSONSchema7, isDefinition?: boolean) {
-    if (schema[prop] == undefined) {
-      return;
+  for (let prop of Object.keys(schema)) {
+    prop = prop as keyof JSONSchema7;
+    let newSchema: JSONSchema7Definition | undefined;
+    let newPath: string | undefined;
+    switch (prop) {
+      case "properties":
+      case "patternProperties":
+      case "allOf":
+      case "anyOf":
+      case "oneOf":
+      case "definitions":
+        {
+          for (const key of Object.keys(schema[prop] ?? {})) {
+            // @ts-expect-error Indexing by string
+            newSchema = schema[prop]?.[key];
+            newPath = `${currentPath}/${prop}/${key}`;
+          }
+        }
+        break;
+
+      case "additionalProperties":
+      case "propertyNames":
+      case "additionalItems":
+      case "contains":
+      case "if":
+      case "then":
+      case "else":
+      case "not":
+        {
+          newPath = `${currentPath}/${prop}`;
+          newSchema = schema[prop];
+        }
+        break;
+
+      case "items":
+        {
+          const propValue = schema[prop];
+          if (Array.isArray(propValue)) {
+            for (const key of Object.keys(propValue)) {
+              // @ts-expect-error Indexing by string
+              newSchema = propValue[key];
+              newPath = `${currentPath}/${prop}/${key}`;
+            }
+          } else {
+            newPath = `${currentPath}/${prop}`;
+            newSchema = propValue;
+          }
+        }
+        break;
+
+      case "dependencies":
+        {
+          for (const key of Object.keys(schema[prop] ?? {})) {
+            const keyValue = schema[prop]?.[key];
+            // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-validation-01#section-6.5.7
+            // dependencies can specify an array of properties that must exist in the instance if the key is a property
+            if (Array.isArray(keyValue)) continue;
+
+            newSchema = keyValue;
+            newPath = `${currentPath}/${prop}/${key}`;
+          }
+        }
+        break;
     }
 
-    for (const key of Object.keys(schema[prop])) {
-      const value = schema[prop][key];
+    if (newSchema == undefined || newPath == undefined) continue;
 
-      // https://datatracker.ietf.org/doc/html/draft-handrews-json-schema-validation-01#section-6.5.7
-      // .dependencies can have a value of `string[]`
-      if (Array.isArray(value)) return;
-
-      const newPath = `${currentPath}/${prop}/${key}`;
-      parseJSONSchema7({
-        schema: value,
-        baseUri,
-        currentPath: newPath,
-        nodes,
-        parents: {[uri]: node},
-        errs,
-        derefQ,
-        isDefinition,
-      });
-    }
-  }
-
-  function parseProp(prop: keyof JSONSchema7) {
-    if (schema[prop] == undefined) {
-      return;
-    }
-
-    const newPath = `${currentPath}/${prop}`;
     parseJSONSchema7({
-      schema: schema[prop],
-      baseUri,
+      schema: newSchema,
       currentPath: newPath,
-      nodes,
       parents: {[uri]: node},
+      baseUri,
+      nodes,
       errs,
       derefQ,
+      isDefinition: prop === "definitions",
     });
   }
 
-  parseObj("properties");
-  parseObj("patternProperties");
-  parseProp("propertyNames");
-  parseProp("additionalProperties");
-
-  parseObj("dependencies");
-
-  if (Array.isArray(schema.items)) {
-    parseObj("items");
-  } else {
-    parseProp("items");
-  }
-  parseProp("additionalItems");
-  parseProp("contains");
-
-  parseProp("if");
-  parseProp("then");
-  parseProp("else");
-
-  parseProp("not");
-  parseObj("allOf");
-  parseObj("anyOf");
-  parseObj("oneOf");
-
-  parseObj("definitions", true);
+  return node;
 }
 
 function mergeUris(base: string, ref: string): string {

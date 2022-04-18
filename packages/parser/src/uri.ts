@@ -81,6 +81,7 @@ function mergePaths(a: string, b: string): string {
 
 /**
  * @see https://datatracker.ietf.org/doc/html/rfc3986#section-5.2.4
+ * FIXME: this implementation is shit and doesn't cover all abnormal test cases
  */
 function removeDots(path: string): string {
   const segs = path.split("/");
@@ -92,7 +93,6 @@ function removeDots(path: string): string {
     else result.push(s);
   }
 
-  // FIXME: this is shit and doesn't cover all abnormal test cases
   // If the path ends with either `.` or `..` we would be missing the closing /
   if (path.endsWith(".")) result.push("");
   if (path.startsWith("/") && result[0]) return "/" + result.join("/");
